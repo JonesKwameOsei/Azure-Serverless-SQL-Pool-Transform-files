@@ -125,7 +125,98 @@ Defining an external data source in a database can reference the data lake locat
 2. In the new script pane, add the following code to retrieve and aggregate data from the CSV sales files using the external data source. Note that the BULK path is relative to the folder location where the data source is defined.
 3. Run the script. The results should look similar to this:<p>
 ![image](https://github.com/JonesKwameOsei/Azure-Serverless-SQL-Pool-Transform-files/assets/81886509/1d139580-0316-432a-af5b-bb2ff5c1d1fa)<p>
+4. Modify the SQL code to save the results of query in an external table, like this:
+```
+ CREATE EXTERNAL TABLE ProductSalesTotals
+     WITH (
+         LOCATION = 'sales/productsales/',
+         DATA_SOURCE = sales_data,
+         FILE_FORMAT = ParquetFormat
+     )
+ AS
+ SELECT Item AS Product,
+     SUM(Quantity) AS ItemsSold,
+     ROUND(SUM(UnitPrice) - SUM(TaxAmount), 2) AS NetRevenue
+ FROM
+     OPENROWSET(
+         BULK 'sales/csv/*.csv',
+         DATA_SOURCE = 'sales_data',
+         FORMAT = 'CSV',
+         PARSER_VERSION = '2.0',
+         HEADER_ROW = TRUE
+     ) AS orders
+ GROUP BY Item;
+```
+5. Run the script to create an external table based on the query results.
+6. Name the script **Create ProductSalesTotals table** and **publish** it.<p>
+![image](https://github.com/JonesKwameOsei/Azure-Serverless-SQL-Pool-Transform-files/assets/81886509/49c4b3b3-c821-43b5-ad62-24c9926ce79e)<p>
+7. Then, in the **Workspace tab** on the **data** page, check the **External tables** folder for the **Sales** SQL database to confirm that a new table named **ProductSalesTotals** has been created.<p>
+![image](https://github.com/JonesKwameOsei/Azure-Serverless-SQL-Pool-Transform-files/assets/81886509/3141c70b-327f-4dd7-aef6-d5f6315d6695)<p>
+8. In the menu for the **ProductSalesTotals** table, select **New SQL script** > **Select TOP 100 rows** to run the resulting script and verify the aggregated product sales data.<p>
+![image](https://github.com/JonesKwameOsei/Azure-Serverless-SQL-Pool-Transform-files/assets/81886509/3f5f4ddb-2f92-4bd6-b492-356f47360020)<p>
+9. Additionally, in the file system for your data lake, check the contents of the sales folder to ensure that a new **productsales** folder has been created.<p>
+![image](https://github.com/JonesKwameOsei/Azure-Serverless-SQL-Pool-Transform-files/assets/81886509/8d626398-21f5-4eb3-a594-7a6c63d5eb15)<p>
+10. Within the **productsales** folder, observe the creation of one or more files with names similar to **ABC123DE—-.parquet**, which contain the aggregated product sales data. You can select one of these files and use the **New SQL script** > **Select TOP 100 rows** menu to query it directly.<p>
+![image](https://github.com/JonesKwameOsei/Azure-Serverless-SQL-Pool-Transform-files/assets/81886509/df3b9711-ad43-424d-bfea-2b35a79dec2f)<p>
+![image](https://github.com/JonesKwameOsei/Azure-Serverless-SQL-Pool-Transform-files/assets/81886509/04c63eef-1e5b-4573-8e35-a5ee1ef41142)<p>
 
+## Encapsulate data transformation in a stored procedure
+If a project will need to transform data frequently, a stored procedure czn be used to encapsulate a CETAS statement.
+
+1. In Synapse Studio, on the Develop page, in the + menu, select SQL script.
+2. In the new script pane, add the following code to create a stored procedure in the Sales database that aggregates sales by year and saves the results in an external table:
+```
+ USE Sales;
+ GO;
+ CREATE PROCEDURE sp_GetYearlySales
+ AS
+ BEGIN
+     -- drop existing table
+     IF EXISTS (
+             SELECT * FROM sys.external_tables
+             WHERE name = 'YearlySalesTotals'
+         )
+         DROP EXTERNAL TABLE YearlySalesTotals
+     -- create external table
+     CREATE EXTERNAL TABLE YearlySalesTotals
+     WITH (
+             LOCATION = 'sales/yearlysales/',
+             DATA_SOURCE = sales_data,
+             FILE_FORMAT = ParquetFormat
+         )
+     AS
+     SELECT YEAR(OrderDate) AS CalendarYear,
+             SUM(Quantity) AS ItemsSold,
+             ROUND(SUM(UnitPrice) - SUM(TaxAmount), 2) AS NetRevenue
+     FROM
+         OPENROWSET(
+             BULK 'sales/csv/*.csv',
+             DATA_SOURCE = 'sales_data',
+             FORMAT = 'CSV',
+             PARSER_VERSION = '2.0',
+             HEADER_ROW = TRUE
+         ) AS orders
+     GROUP BY YEAR(OrderDate)
+ END
+```
+3. Run the script to create the stored procedure, and then, under the code you just ran, add the following code to call the stored procedure:
+```
+EXEC sp_GetYearlySales;
+```
+4. Select only the **EXEC sp_GetYearlySales;** statement you just added, and use the ▷ **Run** button to execute it.
+5. Then, in the *file system** tab for your data lake, check the contents of the sales folder to confirm the creation of a new "yearlysales" folder. Inside the **yearlysales** folder, verify the creation of a parquet file containing the aggregated yearly sales data.<p>
+![image](https://github.com/JonesKwameOsei/Azure-Serverless-SQL-Pool-Transform-files/assets/81886509/6c1f75b5-93f8-4890-bda7-ea22e997e816)<p>
+6. Afterwards, switch back to the SQL script and re-run the **EXEC sp_GetYearlySales;** statement, and observe that an error occurs.<p>
+![image](https://github.com/JonesKwameOsei/Azure-Serverless-SQL-Pool-Transform-files/assets/81886509/24d80b95-2f55-4b25-a52c-4736c16f6242)<p>
+7. Despite the script dropping the external table, the folder containing the data is not deleted. To re-run the stored procedure, you must delete the old data.
+8. Return to the files tab, view the sales folder, select the yearlysales folder, and delete it.<p>
+![image](https://github.com/JonesKwameOsei/Azure-Serverless-SQL-Pool-Transform-files/assets/81886509/aaf8d6b1-165f-47f1-a2e5-3121416ee91f)<p>
+![image](https://github.com/JonesKwameOsei/Azure-Serverless-SQL-Pool-Transform-files/assets/81886509/92adb21e-8358-4f57-9c39-e21fefe4777b)</p>
+9. Then, go back to the SQL script and re-run the "EXEC sp_GetYearlySales;" statement. This time, the operation should succeed and a new data file will be generated.<p>
+![image](https://github.com/JonesKwameOsei/Azure-Serverless-SQL-Pool-Transform-files/assets/81886509/bf7157dc-4a3a-4015-bd97-d0204bc6a566)
+
+## Conclusion
+In this project, we leveraged the transformation capabilities of **Azure Synapse Analytics Serverless SQL Pool** to tranform files. 
 
 
 
