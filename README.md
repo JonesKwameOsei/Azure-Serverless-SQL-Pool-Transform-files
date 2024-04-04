@@ -120,6 +120,13 @@ Defining an external data source in a database can reference the data lake locat
 6. Expand the **Sales database**, its **External Resources folder**, and the **External data sources folder** under that to see the **sales_data** external data source you created.<p>
 ![image](https://github.com/JonesKwameOsei/Azure-Serverless-SQL-Pool-Transform-files/assets/81886509/b8aadf1a-4c54-4f22-95b5-484de6cf055f)<p>
 
+### Create an External Table
+1. In Synapse Studio, on the **Develop** page, go to the + menu and select **SQL script**.
+2. In the new script pane, add the following code to retrieve and aggregate data from the CSV sales files using the external data source. Note that the BULK path is relative to the folder location where the data source is defined.
+3. Run the script. The results should look similar to this:<p>
+![image](https://github.com/JonesKwameOsei/Azure-Serverless-SQL-Pool-Transform-files/assets/81886509/1d139580-0316-432a-af5b-bb2ff5c1d1fa)<p>
+
+
 
 
 
